@@ -1,0 +1,33 @@
+<Build xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <xmlVersion>0</xmlVersion>
+  <versions>
+    <Version>
+      <major>2</major>
+      <minor>4</minor>
+      <build>1</build>
+      <revision />
+      <date>2021-09-29T13:55:00</date>
+      <dateString>2021.09.29.1355</dateString>
+      <yanked>false</yanked>
+      <unreleased>false</unreleased>
+      <notes />
+    </Version>
+  </versions>
+  <editorSettings>
+    <saveToPlayerSettings>true</saveToPlayerSettings>
+    <saveToPackageJson>true</saveToPackageJson>
+    <packageJsonPath>Packages\com.vladfaust.unitywakatime\package.json</packageJsonPath>
+    <buildPathScheme>{p_path}/Build/{p_name}_{ver}</buildPathScheme>
+    <saveToChangelogMd>true</saveToChangelogMd>
+  </editorSettings>
+  <todo>
+    <major>0</major>
+    <minor>0</minor>
+    <build>0</build>
+    <revision />
+    <date>0001-01-01T00:00:00</date>
+    <yanked>false</yanked>
+    <unreleased>false</unreleased>
+    <notes />
+  </todo>
+</Build>

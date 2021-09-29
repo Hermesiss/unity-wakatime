@@ -1,0 +1,49 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6a43cedfec2e042dba78bb08974a8ab9, type: 3}
+  m_Name: _BuildPlus
+  m_EditorClassIdentifier: 
+  build:
+    xmlVersion: 0
+    versions:
+    - major: 2
+      minor: 4
+      build: 1
+      revision: 
+      dateString: 2021.09.29.1355
+      yanked: 0
+      unreleased: 0
+      notes: []
+    editorSettings:
+      saveToPlayerSettings: 1
+      saveToPackageJson: 1
+      packageJsonPath: Packages\com.vladfaust.unitywakatime\package.json
+      buildPathScheme: '{p_path}/Build/{p_name}_{ver}'
+      saveToChangelogMd: 1
+    releaseNotes: 'RELEASE NOTES
+
+      
+
+      v2.4.1 (2021.09.29.1355)
+
+      
+
+'
+    todo:
+      major: 0
+      minor: 0
+      build: 0
+      revision: 
+      dateString: 
+      yanked: 0
+      unreleased: 0
+      notes: []
