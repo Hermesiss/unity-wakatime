@@ -10,15 +10,15 @@ namespace WakaTime {
 
     private bool _needToReload;
 
-    const string DASHBOARD_URL = "https://wakatime.com/dashboard/";
+    private const string DASHBOARD_URL = "https://wakatime.com/dashboard/";
 
     [MenuItem("Window/WakaTime")]
-    static void Init() {
-      Window window = (Window) GetWindow(typeof(Window), false, "WakaTime");
+    private static void Init() {
+      var window = (Window) GetWindow(typeof(Window), false, "WakaTime");
       window.Show();
     }
 
-    void OnGUI() {
+    private void OnGUI() {
       _enabled = EditorGUILayout.Toggle("Enable WakaTime", _enabled);
       _apiKey = EditorGUILayout.TextField("API key", _apiKey);
       EditorGUILayout.LabelField("Project name", _projectName);
@@ -45,7 +45,7 @@ namespace WakaTime {
       EditorGUILayout.EndHorizontal();
     }
 
-    void OnFocus() {
+    private void OnFocus() {
       if (_needToReload) {
         Plugin.Initialize();
         _needToReload = false;

@@ -53,7 +53,7 @@ namespace WakaTime {
       _window.titleContent = new GUIContent("Change project name");
     }
 
-    void OnGUI() {
+    private void OnGUI() {
       EditorGUILayout.BeginHorizontal(); {
         EditorGUILayout.PrefixLabel("Project name");
         _projectSettings[0] = EditorGUILayout.TextField(_projectSettings[0]);

@@ -2,6 +2,7 @@
 
 using System;
 using System.IO;
+using System.Net.Http;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.Networking;
@@ -26,9 +27,9 @@ namespace WakaTime {
     private static bool _debug = true;
 
     private const string URL_PREFIX = "https://api.wakatime.com/api/v1/";
-    private const int HEARTBEAT_COOLDOWN = 120;
+    private const int HEARTBEAT_COOLDOWN = 1;
 
-    private static HeartbeatResponse _lastHeartbeat;
+    private static Heartbeat _lastHeartbeat;
 
     static Plugin() {
       Initialize();
@@ -87,23 +88,35 @@ namespace WakaTime {
     }
 
     [Serializable]
-    struct Response<T> {
+    private struct Response<T> {
       public string error;
       public T data;
     }
 
     [Serializable]
-    struct HeartbeatResponse {
+    private struct HeartbeatResponse {
       public string id;
       public string entity;
       public string type;
-      public float time;
+      public double time;
+
+      public HeartbeatResponse(string id, string entity, string type, double time) {
+        this.id = id;
+        this.entity = entity;
+        this.type = type;
+        this.time = time;
+      }
+
+      public override string ToString() {
+        return $"{id}, {entity}, {type}, {time}";
+      }
     }
 
-    struct Heartbeat {
+    [Serializable]
+    private struct Heartbeat {
       public string entity;
       public string type;
-      public float time;
+      public double time;
       public string project;
       public string branch;
       public string plugin;
@@ -114,7 +127,7 @@ namespace WakaTime {
       public Heartbeat(string file, bool save = false) {
         entity = file == string.Empty ? "Unsaved Scene" : file;
         type = "file";
-        time = (float) DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
+        time = (double) DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
         project = ProjectName;
         plugin = "unity-wakatime";
         branch = "master";
@@ -122,24 +135,34 @@ namespace WakaTime {
         is_write = save;
         is_debugging = _debug;
       }
+
+      public override string ToString() {
+        return $"{entity}, {type}, {time}";
+      }
     }
 
-    static void SendHeartbeat(bool fromSave = false) {
-      if (_debug) Debug.Log("<WakaTime> Sending heartbeat...");
-
-      var currentScene = EditorSceneManager.GetActiveScene().path;
+    private static void SendHeartbeat(bool fromSave = false) {
+      var currentScene = SceneManager.GetActiveScene().path;
       var file = currentScene != string.Empty
         ? Application.dataPath + "/" + currentScene.Substring("Assets/".Length)
         : string.Empty;
 
       var heartbeat = new Heartbeat(file, fromSave);
-      if ((heartbeat.time - _lastHeartbeat.time < HEARTBEAT_COOLDOWN) && !fromSave &&
-        (heartbeat.entity == _lastHeartbeat.entity)) {
-        if (_debug) Debug.Log("<WakaTime> Skip this heartbeat");
+      if (!fromSave && (heartbeat.time - _lastHeartbeat.time < HEARTBEAT_COOLDOWN)) {
+        if (_debug) {
+          Debug.Log($"{heartbeat.time}, {_lastHeartbeat.time}, {HEARTBEAT_COOLDOWN}");
+          Debug.Log("<WakaTime> Skip this heartbeat");
+        }
         return;
       }
 
+      var cachedHeartbeat = _lastHeartbeat;
+
+      _lastHeartbeat = heartbeat;
+
       var heartbeatJSON = JsonUtility.ToJson(heartbeat);
+      
+      if (_debug) Debug.Log($"<WakaTime> Sending heartbeat... {heartbeatJSON}");
 
       var request = UnityWebRequest.Post(URL_PREFIX + "users/current/heartbeats?api_key=" + _apiKey, string.Empty);
       request.uploadHandler = new UploadHandlerRaw(System.Text.Encoding.UTF8.GetBytes(heartbeatJSON));
@@ -147,19 +170,31 @@ namespace WakaTime {
 
       request.SendWebRequest().completed +=
         operation => {
-          if (request.downloadHandler.text == string.Empty) {
+          var downloadHandlerText = request.downloadHandler.text;
+          if (downloadHandlerText == string.Empty) {
             Debug.LogWarning(
               "<WakaTime> Network is unreachable. Consider disabling completely if you're working offline");
             return;
           }
 
-          if (_debug)
-            Debug.Log("<WakaTime> Got response\n" + request.downloadHandler.text);
-          var response =
-            JsonUtility.FromJson<Response<HeartbeatResponse>>(
-              request.downloadHandler.text);
+          if (_debug) {
+            Debug.Log("<WakaTime> Got response\n" + downloadHandlerText);
+            if (!HandleHttpResponseSuccess(request)) return;
+          }
+          
+          Response<HeartbeatResponse>? r = null;
+          try {
+            r = JsonUtility.FromJson<Response<HeartbeatResponse>>(downloadHandlerText);
+          }
+          catch (Exception e) {
+            Debug.LogError($"<WakaTime> error: {e}\n Raw response: {downloadHandlerText}");
+            throw;
+          }
+
+          var response = r.Value;
 
           if (response.error != null) {
+            _lastHeartbeat = cachedHeartbeat;
             if (response.error == "Duplicate") {
               if (_debug) Debug.LogWarning("<WakaTime> Duplicate heartbeat");
             }
@@ -170,51 +205,84 @@ namespace WakaTime {
             }
           }
           else {
-            if (_debug) Debug.Log("<WakaTime> Sent heartbeat!");
-            _lastHeartbeat = response.data;
+            if (_debug) {
+              Debug.Log($"<WakaTime> Sent heartbeat! {response.data}");
+            }
+            //_lastHeartbeat = response.data;
           }
         };
     }
 
+    /// <summary>
+    /// Checks for status code and takes correspond actions 
+    /// </summary>
+    /// <param name="request"></param>
+    /// <returns>Is request fine for further operations</returns>
+    private static bool HandleHttpResponseSuccess(UnityWebRequest request) {
+      var code = request.responseCode;
+      switch (code) {
+        case 200:
+        case 201:
+        case 202:
+          return true;
+        case 400:
+        case 401:
+        case 403:
+        case 404:
+          Debug.LogException(new HttpRequestException($"<WakaTime> {request.error}"));
+          break;
+        case 429:
+          //TODO: cooldown
+          if (_debug)
+            Debug.LogWarning("<WakaTime> Too many request, cooling down");
+          break;
+        case 500:
+          break;
+        default:
+          throw new HttpRequestException($"<WakaTime> Unable to decide what to do with this code: {code}");
+      }
+      return false;
+    }
+
     [DidReloadScripts]
-    static void OnScriptReload() {
+    private static void OnScriptReload() {
       Initialize();
     }
 
-    static void OnPlaymodeStateChanged(PlayModeStateChange change) {
+    private static void OnPlaymodeStateChanged(PlayModeStateChange change) {
       SendHeartbeat();
     }
 
-    static void OnPropertyContextMenu(GenericMenu menu, SerializedProperty property) {
+    private static void OnPropertyContextMenu(GenericMenu menu, SerializedProperty property) {
       SendHeartbeat();
     }
 
-    static void OnHierarchyWindowChanged() {
+    private static void OnHierarchyWindowChanged() {
       SendHeartbeat();
     }
 
-    static void OnSceneSaved(Scene scene) {
+    private static void OnSceneSaved(Scene scene) {
       SendHeartbeat(true);
     }
 
-    static void OnSceneOpened(Scene scene, OpenSceneMode mode) {
+    private static void OnSceneOpened(Scene scene, OpenSceneMode mode) {
       SendHeartbeat();
     }
 
-    static void OnSceneClosing(Scene scene, bool removingScene) {
+    private static void OnSceneClosing(Scene scene, bool removingScene) {
       SendHeartbeat();
     }
 
-    static void OnSceneCreated(Scene scene, NewSceneSetup setup, NewSceneMode mode) {
+    private static void OnSceneCreated(Scene scene, NewSceneSetup setup, NewSceneMode mode) {
       SendHeartbeat();
     }
 
-    static void LinkCallbacks(bool clean = false) {
+    private static void LinkCallbacks(bool clean = false) {
       if (clean) {
         EditorApplication.playModeStateChanged -= OnPlaymodeStateChanged;
         EditorApplication.contextualPropertyMenu -= OnPropertyContextMenu;
         #if UNITY_2018_1_OR_NEWER
-          EditorApplication.hierarchyChanged -= OnHierarchyWindowChanged;
+        EditorApplication.hierarchyChanged -= OnHierarchyWindowChanged;
         #else
           EditorApplication.hierarchyWindowChanged -= OnHierarchyWindowChanged;
         #endif
@@ -227,7 +295,7 @@ namespace WakaTime {
       EditorApplication.playModeStateChanged += OnPlaymodeStateChanged;
       EditorApplication.contextualPropertyMenu += OnPropertyContextMenu;
       #if UNITY_2018_1_OR_NEWER
-        EditorApplication.hierarchyChanged += OnHierarchyWindowChanged;
+      EditorApplication.hierarchyChanged += OnHierarchyWindowChanged;
       #else
         EditorApplication.hierarchyWindowChanged += OnHierarchyWindowChanged;
       #endif
